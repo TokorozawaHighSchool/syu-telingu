@@ -1,0 +1,86 @@
+body {
+    background: linear-gradient(135deg, #e0f7fa 0%, #fffde4 100%);
+    font-family: 'Segoe UI', 'Meiryo', sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    font-size: 2.5em;
+    color: #4fc3f7;
+    text-shadow: 2px 2px 8px #fff, 0 0 8px #81d4fa;
+    margin-top: 32px;
+    margin-bottom: 8px;
+}
+
+#gameCanvas {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px #81d4fa88, 0 0 0 8px #fffde4;
+    margin: 16px auto 8px auto;
+    display: block;
+    border: 2px solid #4fc3f7;
+}
+
+#score {
+    font-size: 1.3em;
+    color: #388e3c;
+    font-weight: bold;
+    margin-bottom: 12px;
+    letter-spacing: 2px;
+    text-shadow: 1px 1px 4px #fff;
+}
+
+#startButton {
+    background: linear-gradient(90deg, #ffecb3 0%, #ffd54f 100%);
+    color: #6d4c41;
+    font-size: 1.2em;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px #ffd54f88;
+    padding: 10px 32px;
+    cursor: pointer;
+    margin-bottom: 24px;
+    transition: background 0.2s, transform 0.2s;
+}
+#startButton:hover {
+    background: linear-gradient(90deg, #ffd54f 0%, #ffecb3 100%);
+    transform: scale(1.07);
+}
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #000;
+    color: #fff;
+    font-family: 'Arial', sans-serif;
+}
+
+#game {
+    border: 2px solid #fff;
+    background-color: #222;
+}
+
+#score {
+    margin-top: 20px;
+    font-size: 24px;
+    text-align: center;
+}
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #fff;
+    color: #000;
+    border: none;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #ddd;
+}
