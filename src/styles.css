@@ -15,7 +15,7 @@ h1 {
 }
 
 #gameCanvas {
-    background: #fff;
+    background: transparent;
     border-radius: 16px;
     box-shadow: 0 4px 24px #81d4fa88, 0 0 0 8px #fffde4;
     margin: 16px auto 8px auto;
