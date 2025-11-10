@@ -40,30 +40,11 @@ function drawBackground() {
 }
 
 function drawPlayer() {
-    // 東方っぽい弾幕プレイヤー：中心の光と外側の小さな羽
+    // プレイヤーを飛行機で描画する（上向き）
     const cx = player.x + player.size / 2;
     const cy = player.y + player.size / 2;
-    // 中心の光
-    let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, player.size);
-    g.addColorStop(0, 'rgba(255,200,230,0.95)');
-    g.addColorStop(0.5, 'rgba(220,180,255,0.8)');
-    g.addColorStop(1, 'rgba(120,160,255,0.0)');
-    ctx.save();
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(cx, cy, player.size, 0, Math.PI * 2);
-    ctx.fill();
-    // 小さな羽（放射状）
-    for (let i = 0; i < 6; i++) {
-        ctx.beginPath();
-        const a = (Date.now() / 300 + i * (Math.PI * 2 / 6));
-        const x = cx + Math.cos(a) * (player.size * 1.3);
-        const y = cy + Math.sin(a) * (player.size * 1.3);
-        ctx.arc(x, y, player.size * 0.25, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,220,240,0.7)';
-        ctx.fill();
-    }
-    ctx.restore();
+    // ロケットシャトルで描画
+    drawRocket(ctx, cx, cy, player.size * 2.2, '#dfeffb');
 }
 
 function drawBullets() {
@@ -83,35 +64,306 @@ function drawBullets() {
 }
 
 function drawEnemies() {
-    // 敵は回転する装飾的な形で描画
+    // 敵は飛行機で描画（ボスは大きめ・色付き、弱敵は小さめ）
     enemies.forEach(enemy => {
-        ctx.save();
-        const ex = enemy.x + enemy.size / 2;
-        const ey = enemy.y + enemy.size / 2;
-        ctx.translate(ex, ey);
-        ctx.rotate(enemy.angle || 0);
-        // グラデーション中心
-        let eg = ctx.createRadialGradient(0, 0, 0, 0, 0, enemy.size);
-        eg.addColorStop(0, enemy.colorInner || 'rgba(255,180,180,0.95)');
-        eg.addColorStop(0.6, enemy.colorOuter || 'rgba(200,80,160,0.9)');
-        eg.addColorStop(1, 'rgba(0,0,0,0)');
-        // 装飾的な花びら（6つ）
-        for (let i = 0; i < 6; i++) {
-            ctx.beginPath();
-            const a = i * (Math.PI * 2 / 6);
-            const rx = Math.cos(a) * enemy.size * 0.55;
-            const ry = Math.sin(a) * enemy.size * 0.55;
-            ctx.ellipse(rx, ry, enemy.size * 0.45, enemy.size * 0.2, a, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,200,230,0.12)';
-            ctx.fill();
+        const ex = enemy.x + (enemy.size || ENEMY_SIZE) / 2;
+        const ey = enemy.y + (enemy.size || ENEMY_SIZE) / 2;
+        // 色を決定
+        let color = enemy.colorOuter || '#ff5555';
+        if (enemy.type === 'boss') {
+            color = enemy.colorInner || '#ff88aa';
         }
-        // 中心
-        ctx.fillStyle = eg;
-        ctx.beginPath();
-        ctx.arc(0, 0, enemy.size * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+    // 敵は怪獣で描画（ボスは大きめ）
+    drawKaiju(ctx, ex, ey, (enemy.size || ENEMY_SIZE) * (enemy.type === 'boss' ? 1.1 : 0.7), color, enemy.type === 'boss');
     });
+}
+
+// 飛行機を描くユーティリティ
+function drawPlane(ctx, x, y, size = 12, color = 'white', flipped = false) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (flipped) ctx.rotate(Math.PI);
+    const s = size / 24; // 若干大きめの基準でディテールを増やす
+    ctx.scale(s, s);
+
+    // シャドウ
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(0, 10 / s, 18, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 機体のメイン（グラデーションで光沢を表現）
+    const grad = ctx.createLinearGradient(-16, -6, 16, 6);
+    grad.addColorStop(0, '#444');
+    grad.addColorStop(0.4, color);
+    grad.addColorStop(0.8, lightenColor(color, 0.25));
+    grad.addColorStop(1, '#222');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-18, 0);
+    ctx.quadraticCurveTo(-6, -8, 10, -3);
+    ctx.quadraticCurveTo(20, 0, 10, 3);
+    ctx.quadraticCurveTo(-6, 8, -18, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // 翼（立体感）
+    ctx.fillStyle = shadeColor(color, -0.15);
+    ctx.beginPath();
+    ctx.moveTo(-2, 0);
+    ctx.lineTo(-16, -14);
+    ctx.lineTo(-6, -4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-2, 0);
+    ctx.lineTo(-16, 14);
+    ctx.lineTo(-6, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // 尾翼
+    ctx.fillStyle = shadeColor(color, -0.05);
+    ctx.beginPath();
+    ctx.moveTo(-12, -4);
+    ctx.lineTo(-22, -12);
+    ctx.lineTo(-18, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // コックピット（ガラス）
+    const glassGrad = ctx.createLinearGradient(2, -3, 6, 3);
+    glassGrad.addColorStop(0, 'rgba(180,220,255,0.95)');
+    glassGrad.addColorStop(1, 'rgba(120,160,200,0.6)');
+    ctx.fillStyle = glassGrad;
+    ctx.beginPath();
+    ctx.ellipse(6, 0, 4, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ハイライト
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 8, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 細いラインやマーキング
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(-4, -2);
+    ctx.lineTo(8, -2);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+// ロケットシャトルを描画（プレイヤー）
+function drawRocket(ctx, x, y, size = 24, color = '#fff') {
+    ctx.save();
+    ctx.translate(x, y);
+    const s = size / 48;
+    ctx.scale(s, s);
+
+    // 本体（円筒）
+    const bodyGrad = ctx.createLinearGradient(-6, -18, 6, 18);
+    bodyGrad.addColorStop(0, shadeColor(color, -0.1));
+    bodyGrad.addColorStop(0.5, color);
+    bodyGrad.addColorStop(1, shadeColor(color, -0.2));
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, -22);
+    ctx.quadraticCurveTo(10, -12, 10, 0);
+    ctx.quadraticCurveTo(10, 12, 0, 22);
+    ctx.quadraticCurveTo(-10, 12, -10, 0);
+    ctx.quadraticCurveTo(-10, -12, 0, -22);
+    ctx.closePath();
+    ctx.fill();
+
+    // 窓
+    ctx.fillStyle = 'rgba(120,200,255,0.95)';
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 5, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // フィン左右
+    ctx.fillStyle = shadeColor(color, -0.25);
+    ctx.beginPath();
+    ctx.moveTo(-6, 6);
+    ctx.lineTo(-16, 12);
+    ctx.lineTo(-6, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(6, 6);
+    ctx.lineTo(16, 12);
+    ctx.lineTo(6, 12);
+    ctx.closePath();
+    ctx.fill();
+
+    // 排気炎（アニメーション）
+    const t = (Date.now() / 80) % 1000;
+    const flameH = 10 + Math.sin(Date.now() / 120) * 4;
+    const fg = ctx.createLinearGradient(0, 14, 0, 30 + flameH);
+    fg.addColorStop(0, 'rgba(255,220,120,0.95)');
+    fg.addColorStop(0.6, 'rgba(255,120,40,0.9)');
+    fg.addColorStop(1, 'rgba(180,40,20,0.0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.ellipse(0, 24 + flameH/2, 6, flameH, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// 怪獣（kaiju）を描画（敵）
+function drawKaiju(ctx, x, y, size = 20, color = '#aaff66', isBoss = false) {
+    ctx.save();
+    ctx.translate(x, y);
+    const s = (size / 40);
+    ctx.scale(s, s);
+
+    // 体の色
+    const bodyColor = color;
+    const dark = shadeColor(bodyColor, -0.25);
+
+    // 体（楕円）
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 18 * (isBoss ? 1.6 : 1), 14 * (isBoss ? 1.3 : 1), 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 背ビレ（トゲ）
+    const spikes = isBoss ? 8 : 5;
+    for (let i = 0; i < spikes; i++) {
+        const ang = -Math.PI / 1.6 + (i / (spikes - 1)) * (Math.PI / 1.2);
+        const sx = Math.cos(ang) * 14;
+        const sy = Math.sin(ang) * -8 - 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + 6 * Math.cos(ang - 0.3), sy + 6 * Math.sin(ang - 0.3));
+        ctx.lineTo(sx + 6 * Math.cos(ang + 0.3), sy + 6 * Math.sin(ang + 0.3));
+        ctx.closePath();
+        ctx.fillStyle = shadeColor(bodyColor, -0.15);
+        ctx.fill();
+    }
+
+    // 目
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(-6, -2, 3, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(6, -2, 3, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(-6, -1, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(6, -1, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 口
+    ctx.fillStyle = shadeColor(bodyColor, -0.35);
+    ctx.beginPath();
+    ctx.ellipse(0, 8, 8, 3, 0, 0, Math.PI);
+    ctx.fill();
+
+    // 手（小さめ）
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.ellipse(-14, 6, 3, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(14, 6, 3, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ボスなら模様を追加
+    if (isBoss) {
+        ctx.strokeStyle = shadeColor(bodyColor, -0.45);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-10, 2);
+        ctx.quadraticCurveTo(0, -6, 10, 2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+// ボスのHPバーを描画
+function drawBossHP() {
+    const boss = enemies.find(e => e.type === 'boss');
+    if (!boss) return;
+    const w = canvas.width * 0.6;
+    const h = 12;
+    const x = (canvas.width - w) / 2;
+    const y = 20;
+    const ratio = Math.max(0, Math.min(1, (boss.hp || 0) / (boss.maxHp || 1)));
+    // 背景
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    // バー背景
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x, y, w, h);
+    // 中央グラデーション
+    const g = ctx.createLinearGradient(x, y, x + w, y);
+    g.addColorStop(0, '#ff6666');
+    g.addColorStop(0.5, '#ffcc66');
+    g.addColorStop(1, '#66ff88');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w * ratio, h);
+    // テキスト
+    ctx.fillStyle = 'white';
+    ctx.font = '12px Meiryo, Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`BOSS HP: ${Math.floor(boss.hp)} / ${Math.floor(boss.maxHp)}`, x + w / 2, y + h - 2);
+    ctx.restore();
+}
+
+// 色操作ヘルパー
+function lightenColor(col, amt) {
+    try {
+        const c = parseCSSColor(col);
+        c.r = Math.min(255, Math.floor(c.r + 255 * amt));
+        c.g = Math.min(255, Math.floor(c.g + 255 * amt));
+        c.b = Math.min(255, Math.floor(c.b + 255 * amt));
+        return `rgb(${c.r},${c.g},${c.b})`;
+    } catch (e) {
+        return col;
+    }
+}
+function shadeColor(col, amt) {
+    try {
+        const c = parseCSSColor(col);
+        c.r = Math.max(0, Math.floor(c.r * (1 + amt)));
+        c.g = Math.max(0, Math.floor(c.g * (1 + amt)));
+        c.b = Math.max(0, Math.floor(c.b * (1 + amt)));
+        return `rgb(${c.r},${c.g},${c.b})`;
+    } catch (e) {
+        return col;
+    }
+}
+// 簡易 CSS 色パーサ（ #rrggbb or rgb(...) or basic hex ）
+function parseCSSColor(col) {
+    if (col.startsWith('#')) {
+        const hex = col.replace('#', '');
+        const r = parseInt(hex.substring(0,2),16);
+        const g = parseInt(hex.substring(2,4),16);
+        const b = parseInt(hex.substring(4,6),16);
+        return { r, g, b };
+    }
+    const m = col.match(/rgba?\(([^)]+)\)/);
+    if (m) {
+        const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+        return { r: parts[0], g: parts[1], b: parts[2] };
+    }
+    // fallback
+    return { r: 200, g: 200, b: 200 };
 }
 
 function drawScore() {
@@ -144,40 +396,107 @@ function drawHearts() {
 
 function drawEnemyBullets() {
     enemyBullets.forEach(b => {
-        const bx = b.x + ENEMY_BULLET_SIZE / 2;
-        const by = b.y + ENEMY_BULLET_SIZE / 2;
-        let g = ctx.createRadialGradient(bx, by, 0, bx, by, ENEMY_BULLET_SIZE);
-        g.addColorStop(0, 'rgba(255,140,140,0.95)');
-        g.addColorStop(1, 'rgba(255,140,140,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(bx, by, ENEMY_BULLET_SIZE, 0, Math.PI * 2);
-        ctx.fill();
+        if (b.type === 'beam') {
+            // ビーム描画：長い線を描く
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(b.angle);
+            const len = canvas.height * 1.2;
+            const bw = b.width || 6;
+            const lg = ctx.createLinearGradient(0, -bw/2, len, bw/2);
+            lg.addColorStop(0, 'rgba(255,200,120,0.95)');
+            lg.addColorStop(0.5, 'rgba(255,120,60,0.9)');
+            lg.addColorStop(1, 'rgba(255,120,60,0.0)');
+            ctx.fillStyle = lg;
+            ctx.fillRect(0, -bw/2, len, bw);
+            ctx.restore();
+        } else {
+            const bx = b.x + ENEMY_BULLET_SIZE / 2;
+            const by = b.y + ENEMY_BULLET_SIZE / 2;
+            let g = ctx.createRadialGradient(bx, by, 0, bx, by, ENEMY_BULLET_SIZE);
+            g.addColorStop(0, 'rgba(255,140,140,0.95)');
+            g.addColorStop(1, 'rgba(255,140,140,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(bx, by, ENEMY_BULLET_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+        }
     });
 }
 
 function updateEnemyBullets() {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
-        enemyBullets[i].x += enemyBullets[i].vx;
-        enemyBullets[i].y += enemyBullets[i].vy;
-        if (enemyBullets[i].y > canvas.height + ENEMY_BULLET_SIZE || enemyBullets[i].y < -ENEMY_BULLET_SIZE || enemyBullets[i].x < -ENEMY_BULLET_SIZE || enemyBullets[i].x > canvas.width + ENEMY_BULLET_SIZE) {
-            enemyBullets.splice(i, 1);
-            continue;
-        }
-        // プレイヤーへの命中判定
-        const dx = (player.x + player.size / 2) - (enemyBullets[i].x + ENEMY_BULLET_SIZE / 2);
-        const dy = (player.y + player.size / 2) - (enemyBullets[i].y + ENEMY_BULLET_SIZE / 2);
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < player.size / 2 + ENEMY_BULLET_SIZE / 2) {
-            // 被弾時は無敵時間を考慮してハートを減らす
-            if (invincibleTimer <= 0) {
-                hearts -= 1;
-                invincibleTimer = 180; // 約3秒の無敵（60FPS想定）
-                // 弾を消す
+        const b = enemyBullets[i];
+        if (b.type === 'beam') {
+            b.life = (b.life || b.maxLife) - 1;
+            if (b.life <= 0) {
                 enemyBullets.splice(i, 1);
-                if (hearts <= 0) {
-                    gameOver = true;
-                    return;
+                continue;
+            }
+            // ビームは当たり判定をプレイヤーに対して矩形的に行う
+            // 判定は下で行う
+        } else {
+            // ホーミング弾は徐々にプレイヤー方向へ向ける
+            if (b.homing) {
+                const px = player.x + player.size / 2;
+                const py = player.y + player.size / 2;
+                const ang = Math.atan2(py - b.y, px - b.x);
+                // current velocity angle
+                const cur = Math.atan2(b.vy, b.vx);
+                // 補間で向きを変える
+                const na = cur + (ang - cur) * 0.08;
+                const sp = b.speed || Math.hypot(b.vx, b.vy) || ENEMY_BULLET_SPEED;
+                b.vx = Math.cos(na) * sp;
+                b.vy = Math.sin(na) * sp;
+            }
+            b.x += b.vx;
+            b.y += b.vy;
+            if (b.y > canvas.height + ENEMY_BULLET_SIZE || b.y < -ENEMY_BULLET_SIZE || b.x < -ENEMY_BULLET_SIZE || b.x > canvas.width + ENEMY_BULLET_SIZE) {
+                enemyBullets.splice(i, 1);
+                continue;
+            }
+        }
+        // 当たり判定
+        if (b.type === 'beam') {
+            // ビームは直線矩形当たり判定
+            const bx = b.x;
+            const by = b.y;
+            const len = canvas.height * 1.2;
+            // プレイヤー座標
+            const px = player.x + player.size / 2;
+            const py = player.y + player.size / 2;
+            // プレイヤーをビーム座標系に変換
+            const dx = px - bx;
+            const dy = py - by;
+            const ca = Math.cos(-b.angle);
+            const sa = Math.sin(-b.angle);
+            const rx = dx * ca - dy * sa;
+            const ry = dx * sa + dy * ca;
+            if (rx > 0 && rx < len && Math.abs(ry) < (b.width || 6)) {
+                if (invincibleTimer <= 0) {
+                    hearts -= 1;
+                    invincibleTimer = 180;
+                    if (hearts <= 0) {
+                        gameOver = true;
+                        return;
+                    }
+                }
+            }
+        } else {
+            const dx = (player.x + player.size / 2) - (b.x + ENEMY_BULLET_SIZE / 2);
+            const dy = (player.y + player.size / 2) - (b.y + ENEMY_BULLET_SIZE / 2);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < player.size / 2 + ENEMY_BULLET_SIZE / 2) {
+                // 被弾時は無敵時間を考慮してハートを減らす
+                if (invincibleTimer <= 0) {
+                    hearts -= 1;
+                    invincibleTimer = 180; // 約3秒の無敵（60FPS想定）
+                    // 弾を消す
+                    enemyBullets.splice(i, 1);
+                    if (hearts <= 0) {
+                        gameOver = true;
+                        return;
+                    }
                 }
             }
         }
@@ -203,9 +522,26 @@ function spawnBoss(stageLevel) {
     const size = ENEMY_SIZE * (1.6 + stageLevel * 0.15);
     const x = canvas.width / 2 - size / 2;
     const y = -size;
-    const hp = 5 + stageLevel * 3;
+    // 体力をかなり増やす（ステージごとに大幅に増加）
+    // ボスの体力を 30 に固定
+    const maxHp = 30;
+    const hp = 30;
     const pick = { inner: 'rgba(255,160,200,0.98)', outer: 'rgba(200,60,140,0.95)' };
-    enemies.push({ x, y, size, type: 'boss', hp, speed: ENEMY_SPEED * 0.4, shootCooldown: 0, shootRate: Math.max(20, 40 - stageLevel * 3), angle: 0, rotationSpeed: 0.01, colorInner: pick.inner, colorOuter: pick.outer, attackType: stageLevel, spiralAngle: 0 });
+    // attackType をステージに応じて決めつつ、内部的に持たせる密度スケールを追加
+    // attackType を拡張してより多くのパターンを使えるようにする
+    const attackType = Math.min(stageLevel, 7);
+    const densityScale = 1 + (stageLevel - 1) * 0.25; // ステージが上がるごとに密度を増やす
+    // ステージごとのデザインプリセット
+    const bossDesigns = [
+        { color: '#ff88aa', belly: '#ffd8e8', spikes: 6, horns: 2, eyeColor: '#111' },
+        { color: '#66ccff', belly: '#dff4ff', spikes: 7, horns: 3, eyeColor: '#001f5b' },
+        { color: '#aaff66', belly: '#f0ffd8', spikes: 8, horns: 4, eyeColor: '#133300' },
+        { color: '#ffcc66', belly: '#fff0d6', spikes: 9, horns: 4, eyeColor: '#332200' },
+        { color: '#d18bff', belly: '#f4e8ff', spikes: 10, horns: 5, eyeColor: '#2a0033' },
+        { color: '#ff6666', belly: '#ffd6d6', spikes: 12, horns: 6, eyeColor: '#2b0000' }
+    ];
+    const design = bossDesigns[Math.max(0, Math.min(bossDesigns.length - 1, stageLevel - 1))];
+    enemies.push({ x, y, size, type: 'boss', hp, maxHp: maxHp, speed: ENEMY_SPEED * 0.4, shootCooldown: 0, shootRate: Math.max(20, 40 - stageLevel * 3), angle: 0, rotationSpeed: 0.01, colorInner: pick.inner, colorOuter: pick.outer, attackType: attackType, spiralAngle: 0, densityScale, targetY: Math.max(80, size), design });
     bossAlive = true;
 }
 
@@ -307,12 +643,25 @@ function updateEnemies() {
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         // 移動はタイプや個別の speed を優先
-        e.y += (e.speed || ENEMY_SPEED);
+        // ボスは targetY に到達するまで降下し、それ以降はホバリングさせる
+        if (e.type === 'boss') {
+            // ゆっくり降下 until targetY
+            const ty = e.targetY || 80;
+            if (e.y < ty) {
+                e.y += Math.max((e.speed || ENEMY_SPEED) * 0.6, 0.6);
+            } else {
+                // ホバリング（上下微動）
+                e.y += Math.sin(Date.now() / 600 + i) * 0.3;
+            }
+        } else {
+            e.y += (e.speed || ENEMY_SPEED);
+        }
         // 横揺れ
         e.x += Math.sin((Date.now() / 500) + i) * 0.6 + (e.ox || 0) * 0.002;
         // 回転更新
         e.angle = (e.angle || 0) + (e.rotationSpeed || 0);
-        if (e.y > canvas.height + e.size) enemies.splice(i, 1);
+    // 通常敵は画面外で削除するが、ボスは削除しない（時間で消えない）
+    if (e.type !== 'boss' && e.y > canvas.height + e.size) enemies.splice(i, 1);
 
         // 敵の射撃処理
         e.shootCooldown = (e.shootCooldown || 0) - 1;
@@ -323,50 +672,84 @@ function updateEnemies() {
             const py = player.y + player.size / 2;
 
             if (e.type === 'boss') {
+                // ボスのHPが半分以下になったら攻撃を変化させる（1回だけ）
+                if (!e.enraged && e.hp <= (e.maxHp || 1) / 2) {
+                    e.enraged = true;
+                    // 切替後のパターンを強化
+                    e.attackType = Math.min(7, (e.attackType || 1) + 2);
+                    e.densityScale = (e.densityScale || 1) * 1.6;
+                    e.shootRate = Math.max(8, (e.shootRate || 40) - 8);
+                }
                 // ボスの攻撃バリエーション（stageに応じて）
                 const t = e.attackType || 1;
+                // ボス攻撃は densityScale によって弾数を増やす
+                const density = e.densityScale || 1;
                 switch (t) {
                     case 1:
                         // 扇形に複数弾（中距離）
-                        for (let k = -2; k <= 2; k++) {
-                            const angle = Math.atan2(py - ey, px - ex) + k * 0.18;
+                        for (let k = -Math.floor(2 * density); k <= Math.floor(2 * density); k++) {
+                            const angle = Math.atan2(py - ey, px - ex) + k * (0.18 / Math.sqrt(density));
                             enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED + 0.5), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED + 0.5) });
                         }
                         break;
                     case 2:
                         // スパイラル（連続的に角度を増やす）
                         e.spiralAngle = (e.spiralAngle || 0) + 0.3;
-                        for (let k = 0; k < 6; k++) {
-                            const angle = e.spiralAngle + k * (Math.PI * 2 / 6);
+                        // 基本の6方向に密度を掛ける
+                        const baseSpiral = 6 * Math.ceil(density);
+                        for (let k = 0; k < baseSpiral; k++) {
+                            const angle = e.spiralAngle + k * (Math.PI * 2 / baseSpiral);
                             enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED) });
                         }
                         break;
                     case 3:
                         // 同心円の小弾（ゆっくり）
-                        for (let k = 0; k < 12; k++) {
-                            const angle = k * (Math.PI * 2 / 12);
-                            enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED * 0.6), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED * 0.6) });
+                        const rings = Math.ceil(density);
+                        const perRing = 12 * Math.ceil(density);
+                        for (let r = 0; r < rings; r++) {
+                            for (let k = 0; k < perRing; k++) {
+                                const angle = k * (Math.PI * 2 / perRing);
+                                enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED * 0.6), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED * 0.6) });
+                            }
                         }
                         break;
                     case 4:
                         // プレイヤー狙いの速い単発扇
-                        for (let k = -1; k <= 1; k++) {
-                            const angle = Math.atan2(py - ey, px - ex) + k * 0.12;
+                        for (let k = -Math.floor(1 * density); k <= Math.floor(1 * density); k++) {
+                            const angle = Math.atan2(py - ey, px - ex) + k * (0.12 / Math.sqrt(density));
                             enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED + 2), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED + 2) });
                         }
                         break;
                     case 5:
                         // 渦巻き＋プレイヤー方向
                         e.spiralAngle = (e.spiralAngle || 0) + 0.2;
-                        for (let k = 0; k < 8; k++) {
-                            const angle = e.spiralAngle + k * 0.8;
+                        const swirlCount = 8 * Math.ceil(density);
+                        for (let k = 0; k < swirlCount; k++) {
+                            const angle = e.spiralAngle + k * (0.8 / Math.sqrt(density));
                             enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED * 0.9), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED * 0.9) });
                         }
                         break;
+                    case 6:
+                        // ホーミング球：プレイヤーを追尾する小弾を複数発射
+                        const homeCount = 4 * Math.ceil(density);
+                        for (let k = 0; k < homeCount; k++) {
+                            const angle = Math.atan2(py - ey, px - ex) + (Math.random() - 0.5) * 0.6;
+                            const speed = ENEMY_BULLET_SPEED * (0.9 + Math.random() * 0.8);
+                            enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, homing: true, speed: speed, life: 300 });
+                        }
+                        break;
+                    case 7:
+                        // ビーム攻撃：ターゲット方向に一定フレーム持続するレーザーを発射
+                        // 発射はやや間隔を置いて行い、密度で幅を増やす
+                        const beamWidth = 6 * Math.max(1, Math.round(density));
+                        const beamLife = 40 + Math.floor(10 * (density - 1));
+                        const beamAngle = Math.atan2(py - ey, px - ex);
+                        enemyBullets.push({ type: 'beam', x: ex, y: ey, angle: beamAngle, width: beamWidth, life: beamLife, maxLife: beamLife });
+                        break;
                     default:
                         // dense spread
-                        for (let k = -3; k <= 3; k++) {
-                            const angle = Math.atan2(py - ey, px - ex) + k * 0.14;
+                        for (let k = -Math.floor(3 * density); k <= Math.floor(3 * density); k++) {
+                            const angle = Math.atan2(py - ey, px - ex) + k * (0.14 / Math.sqrt(density));
                             enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * (ENEMY_BULLET_SPEED + 0.5), vy: Math.sin(angle) * (ENEMY_BULLET_SPEED + 0.5) });
                         }
                         break;
@@ -466,9 +849,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.key.startsWith('Arrow')) e.preventDefault();
     keys[e.key.toLowerCase()] = true;
     // Jキーで弱い敵を全滅
-    if (e.key.toLowerCase() === 'j') {
-        nukeWeakEnemies();
-    }
+    // (Jキーの全滅機能は削除)
     if (gameOver && e.key === ' ') {
         resetGame();
     }
@@ -505,6 +886,8 @@ function gameLoop() {
     drawBullets();
     drawEnemyBullets();
     drawEnemies();
+    // ボスのHPバー
+    if (bossAlive) drawBossHP();
     drawScore();
     drawHearts();
     if (gameOver) {
@@ -516,15 +899,33 @@ function gameLoop() {
     // ステージ進行チェック
     tryAdvanceStage();
     enemySpawnTimer--;
-    if (enemySpawnTimer <= 0) {
-        spawnEnemy();
-        enemySpawnTimer = 60 + Math.random() * 40;
+    if (!bossAlive) {
+        enemySpawnTimer--;
+        if (enemySpawnTimer <= 0) {
+            spawnEnemy();
+            enemySpawnTimer = 60 + Math.random() * 40;
+        }
+    } else {
+        // ボスが生存中は通常敵を出さない。タイマーはリセットしておく
+        enemySpawnTimer = 60;
     }
     requestAnimationFrame(gameLoop);
 }
 
 window.onload = () => {
-    resetGame();
-    gameLoop();
+    // ボタンの取得
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    startBtn.addEventListener('click', () => {
+        startBtn.style.display = 'none';
+        restartBtn.style.display = 'inline-block';
+        resetGame();
+        gameLoop();
+    });
+
+    restartBtn.addEventListener('click', () => {
+        resetGame();
+    });
 };
 // end of game script
