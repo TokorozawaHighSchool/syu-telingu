@@ -33,6 +33,21 @@ const MAX_HEARTS = 5;
 let killCount = 0;
 let invincibleTimer = 0; // 被弾後の無敵時間（フレーム数）
 
+// 星（ビーム用の弾数）
+let stars = 3;
+const MAX_STARS = 3;
+// ビーム配列（プレイヤーから出す光線）
+let beams = [];
+// Jキーの前回押下状態（ホールドで連続発射しないため）
+let lastJPressed = false;
+// ステージごとの弱敵キル数
+let weakKillsThisStage = 0;
+// 敵の一意 ID 生成器
+let enemyIdCounter = 1;
+
+// ビーム DPS 設定
+const BEAM_DPS = 10; // 1秒あたりのダメージ
+
 function drawBackground() {
     // 単色の黒背景
     ctx.fillStyle = 'black';
@@ -424,6 +439,119 @@ function drawEnemyBullets() {
     });
 }
 
+// --- ビーム関連 ---
+function spawnBeam() {
+    if (stars <= 0) return;
+    // 放射状ビームパラメータ
+    const beamsCount = 41; // 放射の本数（密度を大幅に上げる）
+    const spread = Math.PI * 0.9; // 開く角度（ラジアン）
+    const length = Math.max(canvas.width, canvas.height) * 1.2;
+    const life = 120; // 約2秒（60FPS想定）
+    const cx = player.x + player.size / 2;
+    const cy = player.y + player.size / 2;
+    const baseAngle = -Math.PI / 2; // 上方向を中心に放射（プレイヤーは下寄りなので上向き）
+    for (let i = 0; i < beamsCount; i++) {
+        const t = beamsCount === 1 ? 0.5 : i / (beamsCount - 1);
+        const ang = baseAngle - spread / 2 + t * spread;
+        beams.push({ cx, cy, ang, length, life, width: 10 });
+    }
+    stars = Math.max(0, stars - 1);
+}
+
+function updateBeams() {
+    for (let i = beams.length - 1; i >= 0; i--) {
+        const b = beams[i];
+        b.life--;
+        if (b.life <= 0) {
+            beams.splice(i, 1);
+            continue;
+        }
+
+        // ビームは線分 (cx,cy) -> (cx+cos(ang)*length, cy+sin(ang)*length)
+        const x0 = b.cx;
+        const y0 = b.cy;
+        const x1 = b.cx + Math.cos(b.ang) * b.length;
+        const y1 = b.cy + Math.sin(b.ang) * b.length;
+        const bw = b.width;
+
+    // 敵弾との当たり判定: 点と線分の距離を計算して一定幅内なら消す
+        for (let j = enemyBullets.length - 1; j >= 0; j--) {
+            const eb = enemyBullets[j];
+            const ex = eb.x + ENEMY_BULLET_SIZE / 2;
+            const ey = eb.y + ENEMY_BULLET_SIZE / 2;
+            if (pointToSegmentDistance(ex, ey, x0, y0, x1, y1) <= bw + ENEMY_BULLET_SIZE / 2) {
+                enemyBullets.splice(j, 1);
+            }
+        }
+
+        // 敵との当たり判定
+        for (let k = enemies.length - 1; k >= 0; k--) {
+            const en = enemies[k];
+            const ex = en.x + (en.size || ENEMY_SIZE) / 2;
+            const ey = en.y + (en.size || ENEMY_SIZE) / 2;
+            const er = (en.size || ENEMY_SIZE) / 2;
+            if (pointToSegmentDistance(ex, ey, x0, y0, x1, y1) <= bw + er) {
+                if (en.type === 'boss') {
+                    // ボスへは持続ダメージ（DPS）を与える。ビーム1本あたりの総ダメージは maxHp/4 を上限とする。
+                    b.hitMap = b.hitMap || {};
+                    const id = en.id;
+                    const prev = b.hitMap[id] || 0;
+                    const perFrame = BEAM_DPS / 60; // 1フレームあたりのダメージ
+                    const cap = Math.floor((en.maxHp || 1) / 4);
+                    const canDeal = Math.max(0, cap - prev);
+                    const deal = Math.min(canDeal, perFrame);
+                    if (deal > 0) {
+                        en.hp = Math.max(1, en.hp - deal);
+                        b.hitMap[id] = prev + deal;
+                    }
+                } else {
+                    // 弱敵は即死
+                    enemies.splice(k, 1);
+                    score += 100;
+                    killCount += 1;
+                    weakKillsThisStage += 1;
+                    if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
+                }
+            }
+        }
+    }
+}
+
+function drawBeams() {
+    beams.forEach(b => {
+        const x0 = b.cx;
+        const y0 = b.cy;
+        const x1 = b.cx + Math.cos(b.ang) * b.length;
+        const y1 = b.cy + Math.sin(b.ang) * b.length;
+        const alpha = Math.max(0.15, b.life / 14);
+        const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+        grad.addColorStop(0, `rgba(180,255,255,${0.9 * alpha})`);
+        grad.addColorStop(0.6, `rgba(120,220,255,${0.6 * alpha})`);
+        grad.addColorStop(1, `rgba(120,220,255,0)`);
+        ctx.save();
+        ctx.lineWidth = b.width;
+        ctx.strokeStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.restore();
+    });
+}
+
+// ユーティリティ: 点と線分の最短距離
+function pointToSegmentDistance(px, py, x0, y0, x1, y1) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const l2 = dx * dx + dy * dy;
+    if (l2 === 0) return Math.hypot(px - x0, py - y0);
+    let t = ((px - x0) * dx + (py - y0) * dy) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projx = x0 + t * dx;
+    const projy = y0 + t * dy;
+    return Math.hypot(px - projx, py - projy);
+}
+
 function updateEnemyBullets() {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
         const b = enemyBullets[i];
@@ -506,15 +634,19 @@ function updateEnemyBullets() {
 // ステージ関連
 function spawnWeakEnemy(x, y, stageLevel) {
     // 弱い敵は小さく早めに消えるが弾を撃つ
-    const size = Math.max(16, ENEMY_SIZE - stageLevel * 2);
-    const speed = ENEMY_SPEED + stageLevel * 0.3;
-    const shootRate = Math.max(60 - stageLevel * 4, 30);
+    const size = Math.max(14, ENEMY_SIZE - stageLevel * 1.5);
+    const speed = ENEMY_SPEED + stageLevel * 0.35;
+    // ステージが上がるごとに射撃密度を高める（数値を下げるほど頻度増）
+    const shootRate = Math.max(40 - stageLevel * 3, 8);
+    // HP はステージに応じて上昇
+    const maxHp = Math.max(1, Math.floor(1 + stageLevel * 0.6));
+    const hp = maxHp;
     const palette = [
         { inner: 'rgba(255,200,220,0.95)', outer: 'rgba(220,120,200,0.9)' },
         { inner: 'rgba(200,230,255,0.95)', outer: 'rgba(120,180,255,0.9)' }
     ];
     const pick = palette[Math.floor(Math.random() * palette.length)];
-    enemies.push({ x, y, size, type: 'weak', speed, shootCooldown: Math.floor(Math.random() * shootRate), shootRate, angle: 0, rotationSpeed: (Math.random() * 0.04 - 0.02), colorInner: pick.inner, colorOuter: pick.outer });
+    enemies.push({ id: enemyIdCounter++, x, y, size, type: 'weak', speed, shootCooldown: Math.floor(Math.random() * shootRate), shootRate, angle: 0, rotationSpeed: (Math.random() * 0.04 - 0.02), colorInner: pick.inner, colorOuter: pick.outer, hp, maxHp });
 }
 
 function spawnBoss(stageLevel) {
@@ -523,14 +655,14 @@ function spawnBoss(stageLevel) {
     const x = canvas.width / 2 - size / 2;
     const y = -size;
     // 体力をかなり増やす（ステージごとに大幅に増加）
-    // ボスの体力を 30 に固定
-    const maxHp = 30;
-    const hp = 30;
+    // ボスの体力をステージに応じて増やす
+    const maxHp = 60 + Math.max(0, (stageLevel - 1) * 20);
+    const hp = maxHp;
     const pick = { inner: 'rgba(255,160,200,0.98)', outer: 'rgba(200,60,140,0.95)' };
     // attackType をステージに応じて決めつつ、内部的に持たせる密度スケールを追加
     // attackType を拡張してより多くのパターンを使えるようにする
     const attackType = Math.min(stageLevel, 7);
-    const densityScale = 1 + (stageLevel - 1) * 0.25; // ステージが上がるごとに密度を増やす
+    const densityScale = 1 + (stageLevel - 1) * 0.6; // ステージが上がるごとに密度をより大きく増やす
     // ステージごとのデザインプリセット
     const bossDesigns = [
         { color: '#ff88aa', belly: '#ffd8e8', spikes: 6, horns: 2, eyeColor: '#111' },
@@ -541,13 +673,16 @@ function spawnBoss(stageLevel) {
         { color: '#ff6666', belly: '#ffd6d6', spikes: 12, horns: 6, eyeColor: '#2b0000' }
     ];
     const design = bossDesigns[Math.max(0, Math.min(bossDesigns.length - 1, stageLevel - 1))];
-    enemies.push({ x, y, size, type: 'boss', hp, maxHp: maxHp, speed: ENEMY_SPEED * 0.4, shootCooldown: 0, shootRate: Math.max(20, 40 - stageLevel * 3), angle: 0, rotationSpeed: 0.01, colorInner: pick.inner, colorOuter: pick.outer, attackType: attackType, spiralAngle: 0, densityScale, targetY: Math.max(80, size), design });
+    // ボスの射撃頻度もステージで強くする
+    const bossShootRate = Math.max(10, 36 - stageLevel * 4);
+    enemies.push({ id: enemyIdCounter++, x, y, size, type: 'boss', hp, maxHp: maxHp, speed: ENEMY_SPEED * 0.4, shootCooldown: 0, shootRate: bossShootRate, angle: 0, rotationSpeed: 0.01, colorInner: pick.inner, colorOuter: pick.outer, attackType: attackType, spiralAngle: 0, densityScale, targetY: Math.max(80, size), design });
     bossAlive = true;
 }
 
 function spawnStage(stageLevel) {
     stageActive = true;
     bossAlive = false;
+    weakKillsThisStage = 0;
     enemies = enemies.filter(e => e.type !== 'boss');
     // spawn a wave of weak enemies proportional to stage
     const count = 3 + stageLevel * 2;
@@ -560,11 +695,13 @@ function spawnStage(stageLevel) {
 
 function tryAdvanceStage() {
     // ステージの敵が全滅したらボスを出す、ボス倒したら次のステージへ
+    // 出現パターン：ステージ内で弱敵を50体倒したらボス出現
     const weakExists = enemies.some(e => e.type === 'weak');
     const bossExists = enemies.some(e => e.type === 'boss');
-    if (!weakExists && !bossExists && stageActive && !bossAlive) {
-        // 出現パターン：弱敵全滅でボス出現
+    if (weakKillsThisStage >= 50 && stageActive && !bossExists && !bossAlive) {
         spawnBoss(stage);
+        // 発生後はカウントをリセット
+        weakKillsThisStage = 0;
         return;
     }
     if (!weakExists && !bossExists && stageActive && stage > MAX_STAGES) {
@@ -582,8 +719,10 @@ function nukeWeakEnemies() {
             enemies.splice(i, 1);
             score += 100;
             killCount += 1;
+            weakKillsThisStage += 1;
             removed++;
             if (killCount % 20 === 0 && hearts < MAX_HEARTS) hearts += 1;
+            if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
         }
     }
     // 弱敵が全滅したらボス出現のトリガーを試す
@@ -636,7 +775,7 @@ function spawnEnemy() {
         { inner: 'rgba(255,240,180,0.98)', outer: 'rgba(255,180,60,0.95)' }
     ];
     const pick = palette[Math.floor(Math.random() * palette.length)];
-    enemies.push({ x, y: -ENEMY_SIZE, size: ENEMY_SIZE, angle: 0, rotationSpeed: (Math.random() * 0.04 - 0.02), colorInner: pick.inner, colorOuter: pick.outer, ox: Math.random() * 40 - 20 });
+    enemies.push({ id: enemyIdCounter++, x, y: -ENEMY_SIZE, size: ENEMY_SIZE, angle: 0, rotationSpeed: (Math.random() * 0.04 - 0.02), colorInner: pick.inner, colorOuter: pick.outer, ox: Math.random() * 40 - 20 });
 }
 
 function updateEnemies() {
@@ -787,10 +926,16 @@ function checkCollisions() {
                 }
                 // 弱敵に触れた場合は消滅させる（ボスは消さない）
                 if (enemy.type !== 'boss') {
-                    enemies.splice(k, 1);
-                    score += 100;
-                    killCount += 1;
-                    if (killCount % 20 === 0 && hearts < MAX_HEARTS) hearts += 1;
+                    // 弱敵はHPを持つので触れた時はダメージを与える（ここでは1ダメージ）
+                    enemy.hp = (enemy.hp || enemy.maxHp || 1) - 1;
+                    if (enemy.hp <= 0) {
+                        enemies.splice(k, 1);
+                        score += 100;
+                        killCount += 1;
+                        weakKillsThisStage += 1;
+                        if (killCount % 20 === 0 && hearts < MAX_HEARTS) hearts += 1;
+                        if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
+                    }
                 }
             }
         }
@@ -828,14 +973,20 @@ function checkCollisions() {
                         if (killCount % 20 === 0 && hearts < MAX_HEARTS) {
                             hearts += 1;
                         }
+                        if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
                     }
                 } else {
-                    // 弱い敵は即死
-                    enemies.splice(i, 1);
-                    score += 100;
-                    killCount += 1;
-                    if (killCount % 20 === 0 && hearts < MAX_HEARTS) {
-                        hearts += 1;
+                    // 弱い敵はHPを持つのでダメージを与える
+                    enemy.hp = (enemy.hp || enemy.maxHp || 1) - 1;
+                    if (enemy.hp <= 0) {
+                        enemies.splice(i, 1);
+                        score += 100;
+                        killCount += 1;
+                        weakKillsThisStage += 1;
+                        if (killCount % 20 === 0 && hearts < MAX_HEARTS) {
+                            hearts += 1;
+                        }
+                        if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
                     }
                 }
                 break;
@@ -848,14 +999,22 @@ window.addEventListener('keydown', (e) => {
     // 矢印キーやスペースでページがスクロールしないようにする
     if (e.key === ' ' || e.key.startsWith('Arrow')) e.preventDefault();
     keys[e.key.toLowerCase()] = true;
-    // Jキーで弱い敵を全滅
-    // (Jキーの全滅機能は削除)
+    // Jキーでビームを発射（ホールドで連射しない）
+    if (e.key.toLowerCase() === 'j') {
+        if (!lastJPressed) {
+            // 押した瞬間に発射
+            spawnBeam();
+            lastJPressed = true;
+        }
+    }
     if (gameOver && e.key === ' ') {
-        resetGame();
+    resetGame();
+    if (!gameRunning) requestAnimationFrame(gameLoop);
     }
 });
 window.addEventListener('keyup', (e) => {
     keys[e.key.toLowerCase()] = false;
+    if (e.key.toLowerCase() === 'j') lastJPressed = false;
 });
 
 function resetGame() {
@@ -870,21 +1029,27 @@ function resetGame() {
     stage = 1;
     stageActive = false;
     bossAlive = false;
+    stars = MAX_STARS;
+    weakKillsThisStage = 0;
     spawnStage(stage);
 }
 
 let enemySpawnTimer = 0;
+let gameRunning = false;
 function gameLoop() {
+    gameRunning = true;
     drawBackground();
     updatePlayer();
     shootBullet();
     updateBullets();
     updateEnemies();
     updateEnemyBullets();
+    updateBeams();
     checkCollisions();
     drawPlayer();
     drawBullets();
     drawEnemyBullets();
+    drawBeams();
     drawEnemies();
     // ボスのHPバー
     if (bossAlive) drawBossHP();
@@ -892,7 +1057,8 @@ function gameLoop() {
     drawHearts();
     if (gameOver) {
         drawGameOver();
-        return;
+    gameRunning = false;
+    return;
     }
     // 無敵タイマー更新
     if (invincibleTimer > 0) invincibleTimer--;
@@ -921,11 +1087,16 @@ window.onload = () => {
         startBtn.style.display = 'none';
         restartBtn.style.display = 'inline-block';
         resetGame();
-        gameLoop();
+    if (!gameRunning) requestAnimationFrame(gameLoop);
     });
 
     restartBtn.addEventListener('click', () => {
-        resetGame();
+    // Reset state and ensure the main loop is running
+    resetGame();
+    // 増加ボーナス: リスタートでハートと星を+3（上限あり）
+    hearts = Math.min(MAX_HEARTS, hearts + 3);
+    stars = Math.min(MAX_STARS, stars + 3);
+    if (!gameRunning) requestAnimationFrame(gameLoop);
     });
 };
 // end of game script
