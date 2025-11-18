@@ -1,34 +1,48 @@
-# Tetris Project
+# シューティングゲーム
 
-This project is a simple implementation of the classic game Tetris using HTML, CSS, and JavaScript. 
+HTML、CSS、JavaScriptを使用した縦スクロール型シューティングゲームです。
 
-## Project Structure
+## プロジェクト構成
 
 ```
-tetris-project
-├── src
-│   ├── index.html       # HTML structure for the Tetris game
-│   ├── main.js          # JavaScript logic for game functionality
-│   └── styles.css       # CSS styles for the game
-└── README.md            # Project documentation
+syu-telingu
+├── index.html       # ゲームのHTML構造
+├── main.js          # ゲームのロジックとメカニクス
+├── styles.css       # ゲームのスタイル
+└── README.md        # プロジェクトドキュメント
 ```
 
-## Setup Instructions
+## セットアップ手順
 
-1. Clone the repository to your local machine.
-2. Navigate to the `tetris-project` directory.
-3. Open `src/index.html` in your web browser to play the game.
+1. リポジトリをローカルマシンにクローンします。
+2. `index.html` をウェブブラウザで開いてゲームをプレイします。
 
-## How to Play
+## 遊び方
 
-- Use the arrow keys to move and rotate the Tetriminos.
-- The goal is to fill horizontal lines with blocks to clear them.
-- The game ends when the blocks reach the top of the canvas.
+- **移動**: 矢印キー（←→↑↓）でプレイヤーを操作
+- **射撃**: Zキーで弾を発射
+- **ビーム**: Jキーでビーム攻撃（星を消費）
+- **目標**: 敵を倒してステージをクリア
+- **ライフ**: ハート3つでスタート（最大5つ）
 
-## Features
+## ゲーム機能
 
-- Tetrimino generation and movement
-- Line clearing and scoring system
-- Responsive design for various screen sizes
+- 6つのステージ
+- ボス戦
+- スコアシステム
+- ライフ（ハート）システム
+- ビーム攻撃システム（星を消費）
+- 無敵時間
+- 弱敵とボス敵
+- 敵の弾幕攻撃
 
-Enjoy playing Tetris!
+## 操作方法
+
+| キー | 動作 |
+|------|------|
+| ← → | 左右移動 |
+| ↑ ↓ | 上下移動 |
+| Z | 射撃 |
+| J | ビーム攻撃 |
+
+シューティングゲームを楽しんでください！
