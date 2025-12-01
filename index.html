@@ -11,8 +11,11 @@
     <canvas id="gameCanvas" width="480" height="640" style="background: black; display: block; margin: 0 auto;"></canvas>
 
     <div id="ui" style="text-align:center; margin-top:12px;">
-        <button id="startBtn" style="font-size:18px; padding:8px 16px;">スタート</button>
-        <button id="restartBtn" style="font-size:18px; padding:8px 16px; display:none; margin-left:8px;">リスタート</button>
+        <div id="hud" style="display:flex; align-items:center; justify-content:center; gap:12px;">
+            <div id="starsContainer" aria-label="ビーム残数" title="ビーム残数"></div>
+            <button id="startBtn" style="font-size:18px; padding:8px 16px;">スタート</button>
+            <button id="restartBtn" style="font-size:18px; padding:8px 16px; display:none; margin-left:8px;">リスタート</button>
+        </div>
     </div>
 
     <script src="main.js"></script>

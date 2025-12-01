@@ -4,9 +4,12 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const PLAYER_SIZE = 10;
-const PLAYER_SPEED = 5;
+// playerSpeed is mutable and grows slightly per enemy kill
+let playerSpeed = 5;
 const BULLET_SIZE = 6;
-const BULLET_SPEED = 10;
+// bulletSpeed and bulletDensity are mutable and increase with each enemy kill
+let bulletSpeed = 10; // replaces BULLET_SPEED constant
+let bulletDensity = 1.0; // multiplier for multi-shot density
 const ENEMY_SIZE = 28;
 const ENEMY_SPEED = 2.5;
 const ENEMY_BULLET_SIZE = 6;
@@ -456,6 +459,8 @@ function spawnBeam() {
         beams.push({ cx, cy, ang, length, life, width: 10 });
     }
     stars = Math.max(0, stars - 1);
+    // update UI
+    try { updateStarsUI(); } catch (e) {}
 }
 
 function updateBeams() {
@@ -509,6 +514,11 @@ function updateBeams() {
                     enemies.splice(k, 1);
                     score += 100;
                     killCount += 1;
+                    // Increase player bullet speed and density by 1% per kill
+                    bulletSpeed *= 1.005;
+                    bulletDensity *= 1.005;
+                    // increase player movement speed slightly per kill
+                    playerSpeed *= 1.001;
                     weakKillsThisStage += 1;
                     if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
                 }
@@ -719,6 +729,9 @@ function nukeWeakEnemies() {
             enemies.splice(i, 1);
             score += 100;
             killCount += 1;
+            bulletSpeed *= 1.005;
+            bulletDensity *= 1.005;
+            playerSpeed *= 1.001;
             weakKillsThisStage += 1;
             removed++;
             if (killCount % 20 === 0 && hearts < MAX_HEARTS) hearts += 1;
@@ -727,6 +740,7 @@ function nukeWeakEnemies() {
     }
     // 弱敵が全滅したらボス出現のトリガーを試す
     tryAdvanceStage();
+    try { updateStarsUI(); } catch (e) {}
     return removed;
 }
 
@@ -742,7 +756,7 @@ function drawGameOver() {
 function updatePlayer() {
     // プレイヤー移動処理（キーは小文字で保存される）
     // Space を押している間は移動速度を半分にする
-    const speed = keys[' '] ? PLAYER_SPEED / 2 : PLAYER_SPEED;
+    const speed = keys[' '] ? playerSpeed / 2 : playerSpeed;
     if (keys['arrowleft'] && player.x > 0) player.x -= speed;
     if (keys['arrowright'] && player.x < canvas.width - player.size) player.x += speed;
     if (keys['arrowup'] && player.y > 0) player.y -= speed;
@@ -753,7 +767,22 @@ function shootBullet() {
     // 射撃は F キーに割り当て
     if (keys['f']) {
         if (player.shootCooldown <= 0) {
-            bullets.push({ x: player.x + player.size / 2 - BULLET_SIZE / 2, y: player.y, size: BULLET_SIZE });
+            // bulletDensity は発射あたりの平均弾数（例: 1.0 -> 1弾、2.5 -> 基本2弾 + 50% で3弾）
+            const avg = Math.max(0.1, bulletDensity);
+            const base = Math.floor(avg);
+            const frac = avg - base;
+            const total = base + (Math.random() < frac ? 1 : 0);
+            // spread small angle for extra bullets
+            const spread = 0.12; // radians
+            for (let i = 0; i < Math.max(1, total); i++) {
+                // center the pattern
+                let angle = 0;
+                if (total > 1) {
+                    const t = (i / (total - 1)) - 0.5; // -0.5 .. 0.5
+                    angle = t * spread;
+                }
+                bullets.push({ x: player.x + player.size / 2 - BULLET_SIZE / 2, y: player.y, size: BULLET_SIZE, angle });
+            }
             player.shootCooldown = 8;
         }
     }
@@ -762,7 +791,12 @@ function shootBullet() {
 
 function updateBullets() {
     for (let i = bullets.length - 1; i >= 0; i--) {
-        bullets[i].y -= BULLET_SPEED;
+    // support angled bullets (small spread)
+    const b = bullets[i];
+    const vy = Math.cos(b.angle || 0) * bulletSpeed;
+    const vx = Math.sin(b.angle || 0) * bulletSpeed;
+    b.y -= vy;
+    b.x += vx;
         if (bullets[i].y < -BULLET_SIZE) bullets.splice(i, 1);
     }
 }
@@ -932,6 +966,9 @@ function checkCollisions() {
                         enemies.splice(k, 1);
                         score += 100;
                         killCount += 1;
+                        bulletSpeed *= 1.005;
+                        bulletDensity *= 1.005;
+                        playerSpeed *= 1.001;
                         weakKillsThisStage += 1;
                         if (killCount % 20 === 0 && hearts < MAX_HEARTS) hearts += 1;
                         if (killCount % 30 === 0 && stars < MAX_STARS) stars = Math.min(MAX_STARS, stars + 1);
@@ -970,6 +1007,9 @@ function checkCollisions() {
                         }
                         // boss を倒した分もカウントに含める
                         killCount += 1;
+                        bulletSpeed *= 1.005;
+                        bulletDensity *= 1.005;
+                        playerSpeed *= 1.001;
                         if (killCount % 20 === 0 && hearts < MAX_HEARTS) {
                             hearts += 1;
                         }
@@ -982,6 +1022,9 @@ function checkCollisions() {
                         enemies.splice(i, 1);
                         score += 100;
                         killCount += 1;
+                        bulletSpeed *= 1.005;
+                        bulletDensity *= 1.005;
+                        playerSpeed *= 1.001;
                         weakKillsThisStage += 1;
                         if (killCount % 20 === 0 && hearts < MAX_HEARTS) {
                             hearts += 1;
@@ -1032,6 +1075,7 @@ function resetGame() {
     stars = MAX_STARS;
     weakKillsThisStage = 0;
     spawnStage(stage);
+    try { updateStarsUI(); } catch (e) {}
 }
 
 let enemySpawnTimer = 0;
@@ -1075,6 +1119,8 @@ function gameLoop() {
         // ボスが生存中は通常敵を出さない。タイマーはリセットしておく
         enemySpawnTimer = 60;
     }
+    // Keep UI in sync
+    try { if (typeof updateStarsUI === 'function') updateStarsUI(); } catch (e) {}
     requestAnimationFrame(gameLoop);
 }
 
@@ -1082,6 +1128,23 @@ window.onload = () => {
     // ボタンの取得
     const startBtn = document.getElementById('startBtn');
     const restartBtn = document.getElementById('restartBtn');
+    const starsContainer = document.getElementById('starsContainer');
+
+    // create updateStarsUI in global scope if not exists
+    window.updateStarsUI = window.updateStarsUI || function() {
+        const sc = document.getElementById('starsContainer');
+        if (!sc) return;
+        sc.innerHTML = '';
+        for (let i = 0; i < MAX_STARS; i++) {
+            const div = document.createElement('div');
+            div.className = 'star ' + (i < stars ? 'filled' : 'empty');
+            div.setAttribute('aria-hidden', 'true');
+            sc.appendChild(div);
+        }
+    };
+
+    // initial render
+    try { updateStarsUI(); } catch (e) {}
 
     startBtn.addEventListener('click', () => {
         startBtn.style.display = 'none';
@@ -1096,6 +1159,7 @@ window.onload = () => {
     // 増加ボーナス: リスタートでハートと星を+3（上限あり）
     hearts = Math.min(MAX_HEARTS, hearts + 3);
     stars = Math.min(MAX_STARS, stars + 3);
+    try { updateStarsUI(); } catch (e) {}
     if (!gameRunning) requestAnimationFrame(gameLoop);
     });
 };
