@@ -19,7 +19,9 @@ let player = {
     x: canvas.width / 2 - PLAYER_SIZE / 2,
     y: canvas.height - 45,
     size: PLAYER_SIZE,
-    shootCooldown: 0
+    shootCooldown: 0,
+    vx: 0,
+    vy: 0
 };
 let bullets = [];
 let enemies = [];
@@ -671,7 +673,10 @@ function spawnBoss(stageLevel) {
     const pick = { inner: 'rgba(255,160,200,0.98)', outer: 'rgba(200,60,140,0.95)' };
     // attackType をステージに応じて決めつつ、内部的に持たせる密度スケールを追加
     // attackType を拡張してより多くのパターンを使えるようにする
-    const attackType = Math.min(stageLevel, 7);
+    // determine attack type; for higher stages we may override to special patterns
+    let attackType = Math.min(stageLevel, 7);
+    // For stage 5 and 6, use a high-density small-bullet barrage instead of beam
+    if (stageLevel >= 5) attackType = 8;
     const densityScale = 1 + (stageLevel - 1) * 0.6; // ステージが上がるごとに密度をより大きく増やす
     // ステージごとのデザインプリセット
     const bossDesigns = [
@@ -754,13 +759,26 @@ function drawGameOver() {
 }
 
 function updatePlayer() {
-    // プレイヤー移動処理（キーは小文字で保存される）
-    // Space を押している間は移動速度を半分にする
-    const speed = keys[' '] ? playerSpeed / 2 : playerSpeed;
-    if (keys['arrowleft'] && player.x > 0) player.x -= speed;
-    if (keys['arrowright'] && player.x < canvas.width - player.size) player.x += speed;
-    if (keys['arrowup'] && player.y > 0) player.y -= speed;
-    if (keys['arrowdown'] && player.y < canvas.height - player.size) player.y += speed;
+    // Smooth movement with inertia: interpolate velocity toward target
+    const maxSpeed = keys[' '] ? playerSpeed / 2 : playerSpeed;
+    // target velocity based on keys
+    let tx = 0, ty = 0;
+    if (keys['arrowleft']) tx = -maxSpeed;
+    if (keys['arrowright']) tx = maxSpeed;
+    if (keys['arrowup']) ty = -maxSpeed;
+    if (keys['arrowdown']) ty = maxSpeed;
+    // lerp factor (how quickly velocity approaches target) - tuned for滑らかさ
+    const accel = 0.12; // 0.0..1.0, larger = snappier
+    player.vx += (tx - player.vx) * accel;
+    player.vy += (ty - player.vy) * accel;
+    // apply velocity to position
+    player.x += player.vx;
+    player.y += player.vy;
+    // boundary clamp and damp velocity on collision
+    if (player.x < 0) { player.x = 0; player.vx = 0; }
+    if (player.x > canvas.width - player.size) { player.x = canvas.width - player.size; player.vx = 0; }
+    if (player.y < 0) { player.y = 0; player.vy = 0; }
+    if (player.y > canvas.height - player.size) { player.y = canvas.height - player.size; player.vy = 0; }
 }
 
 function shootBullet() {
@@ -919,6 +937,21 @@ function updateEnemies() {
                         const beamAngle = Math.atan2(py - ey, px - ex);
                         enemyBullets.push({ type: 'beam', x: ex, y: ey, angle: beamAngle, width: beamWidth, life: beamLife, maxLife: beamLife });
                         break;
+                    case 8:
+                        // High-density small-bullet barrage (used for stage 5 and 6 bosses)
+                        // Fire multiple rings/streams of small bullets with slight random spread
+                        const layers = 3 + Math.floor(density);
+                        for (let L = 0; L < layers; L++) {
+                            const count = 40 * Math.ceil(density * (1 + L * 0.2));
+                            const speedFactor = 0.9 + L * 0.08;
+                            for (let k = 0; k < count; k++) {
+                                const angle = (k / count) * (Math.PI * 2) + (Math.random() - 0.5) * 0.06 + (L * 0.12);
+                                const sp = ENEMY_BULLET_SPEED * speedFactor * (0.9 + Math.random() * 0.3);
+                                // spawn denser, smaller bullets
+                                enemyBullets.push({ x: ex - ENEMY_BULLET_SIZE / 2, y: ey - ENEMY_BULLET_SIZE / 2, vx: Math.cos(angle) * sp, vy: Math.sin(angle) * sp, size: ENEMY_BULLET_SIZE * 0.6, life: 200 + Math.floor(40 * L) });
+                            }
+                        }
+                        break;
                     default:
                         // dense spread
                         for (let k = -Math.floor(3 * density); k <= Math.floor(3 * density); k++) {
@@ -1064,6 +1097,8 @@ function resetGame() {
     player.x = canvas.width / 2 - PLAYER_SIZE / 2;
     player.y = canvas.height - 60;
     player.shootCooldown = 0;
+    player.vx = 0;
+    player.vy = 0;
     bullets = [];
     enemies = [];
     enemyBullets = [];
